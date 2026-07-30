@@ -2,18 +2,18 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 
-// Initialize bot
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+if (!token) {
+  console.error('TELEGRAM_BOT_TOKEN is not set!');
+  process.exit(1);
+}
 
-// Initialize express for Railway
+const bot = new TelegramBot(token, { polling: true });
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Database setup
 const db = new sqlite3.Database('./data.db');
 
-// Create tables
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
@@ -40,10 +40,6 @@ db.serialize(() => {
   )`);
 });
 
-// User states for tracking
-const userStates = {};
-
-// Helpers
 function getMotivationalQuote() {
   const quotes = [
     "Small steps lead to big changes. Keep going!",
@@ -88,14 +84,12 @@ function getJournalPrompt() {
   return prompts[Math.floor(Math.random() * prompts.length)];
 }
 
-// Bot commands
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const username = msg.from.username || 'user';
   const firstName = msg.from.first_name || '';
   
-  // Register user
   db.run(`INSERT OR IGNORE INTO users (user_id, username, first_name, last_active) VALUES (?, ?, ?, date('now'))`, 
     [userId, username, firstName]);
   
@@ -122,7 +116,6 @@ bot.onText(/\/focus/, (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   
-  // Update user stats
   db.run(`UPDATE users SET focus_count = focus_count + 1 WHERE user_id = ?`, [userId]);
   
   const focusMessage = `*Focus Session Started!*
@@ -142,10 +135,9 @@ Ready, set, focus!`;
 
   bot.sendMessage(chatId, focusMessage, { parse_mode: 'Markdown' });
   
-  // Set reminder after 25 minutes
   setTimeout(() => {
     bot.sendMessage(chatId, 'Focus session complete! Time for a well-deserved break.');
-  }, 1500000); // 25 minutes
+  }, 1500000);
 });
 
 bot.onText(/\/breath/, (msg) => {
@@ -159,23 +151,13 @@ bot.onText(/\/breath/, (msg) => {
 
 bot.onText(/\/habits/, (msg) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
   
   const habitKeyboard = {
     reply_markup: {
       inline_keyboard: [
-        [
-          { text: 'Meditate', callback_data: 'habit_meditate' },
-          { text: 'Read', callback_data: 'habit_read' }
-        ],
-        [
-          { text: 'Exercise', callback_data: 'habit_exercise' },
-          { text: 'Hydrate', callback_data: 'habit_hydrate' }
-        ],
-        [
-          { text: 'Journal', callback_data: 'habit_journal' },
-          { text: 'View Stats', callback_data: 'habit_stats' }
-        ]
+        [{ text: 'Meditate', callback_data: 'habit_meditate' }, { text: 'Read', callback_data: 'habit_read' }],
+        [{ text: 'Exercise', callback_data: 'habit_exercise' }, { text: 'Hydrate', callback_data: 'habit_hydrate' }],
+        [{ text: 'Journal', callback_data: 'habit_journal' }, { text: 'View Stats', callback_data: 'habit_stats' }]
       ]
     }
   };
@@ -194,25 +176,21 @@ bot.onText(/\/motivate/, (msg) => {
 bot.onText(/\/journal/, (msg) => {
   const chatId = msg.chat.id;
   const prompt = getJournalPrompt();
-  bot.sendMessage(chatId, `*Journal Time*\n\n${prompt}\n\nTake 5 minutes to write your thoughts.\nNo judgment, just honesty.\n\nShare your reflection if you would like support.`,
+  bot.sendMessage(chatId, `*Journal Time*\n\n${prompt}\n\nTake 5 minutes to write your thoughts.\nNo judgment, just honesty.`,
     { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/reminder/, (msg) => {
   const chatId = msg.chat.id;
-  
   const reminderMessage = `*Screen Break Reminder*\n\nSet your break interval:\n\nType /break15 for 15 minutes\nType /break30 for 30 minutes\nType /break60 for 60 minutes\nType /stopreminder to cancel\n\nRemember: Your eyes and mind need rest!`;
-
   bot.sendMessage(chatId, reminderMessage, { parse_mode: 'Markdown' });
 });
 
-// Break command handlers
 bot.onText(/\/break(\d+)/, (msg, match) => {
   const chatId = msg.chat.id;
   const minutes = parseInt(match[1]);
   
-  bot.sendMessage(chatId, 
-    `Reminder set for ${minutes} minutes!\n\nI will remind you to take a break.\nStay healthy!`);
+  bot.sendMessage(chatId, `Reminder set for ${minutes} minutes!\n\nI will remind you to take a break.\nStay healthy!`);
   
   setTimeout(() => {
     bot.sendMessage(chatId, 
@@ -233,7 +211,6 @@ bot.onText(/\/stats/, (msg) => {
   db.get(`SELECT focus_count, breath_count, habit_streak FROM users WHERE user_id = ?`, [userId], (err, row) => {
     if (row) {
       const stats = `*Your Progress*\n\nFocus Sessions: ${row.focus_count}\nBreathing Exercises: ${row.breath_count}\nHabit Streak: ${row.habit_streak} days\n\nKeep up the great work!\nEvery small step counts.`;
-      
       bot.sendMessage(chatId, stats, { parse_mode: 'Markdown' });
     }
   });
@@ -241,21 +218,16 @@ bot.onText(/\/stats/, (msg) => {
 
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
-  
-  const help = `*Help & Commands*\n\nHere is everything I can do:\n\n/focus - Start a 25-min focus session\n/breath - Guided breathing exercise\n/habits - Track your daily habits\n/motivate - Get motivation\n/journal - Daily reflection prompt\n/reminder - Set screen break reminders\n/stats - View your progress\n/about - Learn about this bot\n/help - Show this menu\n\n*Tips:*\nUse /break15, /break30, etc. for reminders\nYour data is private and secure\nConsistency beats intensity!\n\nNeed support? I am always here.`;
-
+  const help = `*Help & Commands*\n\nHere is everything I can do:\n\n/focus - Start a 25-min focus session\n/breath - Guided breathing exercise\n/habits - Track your daily habits\n/motivate - Get motivation\n/journal - Daily reflection prompt\n/reminder - Set screen break reminders\n/stats - View your progress\n/about - Learn about this bot\n/help - Show this menu\n\n*Tips:*\nUse /break15, /break30, etc. for reminders\nYour data is private and secure\nConsistency beats intensity!`;
   bot.sendMessage(chatId, help, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/about/, (msg) => {
   const chatId = msg.chat.id;
-  
-  const about = `*About SCB Wellbeing Bot*\n\nYour personal digital wellness companion!\n\n*Features:*\nPrivacy-first - No data stored\nScience-backed techniques\nAd-free experience\nFree to use\n\n*Why I exist:*\nIn our digital world, we need moments of pause. I am here to help you find balance, focus, and peace.\n\n*Credits:*\nBuilt with love for the Telegram community\nVersion 1.0.0\n\n*Connect:*\n@SCB888BOT - Your wellbeing journey starts here!`;
-
+  const about = `*About SCB Wellbeing Bot*\n\nYour personal digital wellness companion!\n\n*Features:*\nPrivacy-first - No data stored\nScience-backed techniques\nAd-free experience\nFree to use\n\n*Why I exist:*\nIn our digital world, we need moments of pause. I am here to help you find balance, focus, and peace.\n\n*Credits:*\nBuilt with love for the Telegram community\nVersion 1.0.0`;
   bot.sendMessage(chatId, about, { parse_mode: 'Markdown' });
 });
 
-// Callback queries
 bot.on('callback_query', (callbackQuery) => {
   const msg = callbackQuery.message;
   const chatId = msg.chat.id;
@@ -287,12 +259,10 @@ bot.on('callback_query', (callbackQuery) => {
   }
 });
 
-// Error handling
 bot.on('error', (error) => {
   console.error('Bot error:', error);
 });
 
-// Express server for Railway
 app.get('/', (req, res) => {
   res.send('SCB Wellbeing Bot is running!');
 });
@@ -301,7 +271,6 @@ app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 
-// Handle process termination
 process.on('SIGINT', () => {
   db.close();
   process.exit();
